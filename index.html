@@ -304,7 +304,7 @@ body{font-family:'Open Sans',sans-serif;background:var(--sf);color:var(--tx);min
 
 <div class="sec" id="tab-voices">
   <div class="stit">Respondent Voices</div>
-  <div class="sdsc">Open-text responses from both survey years. Expand a panel to browse quotes or click "Analyze with AI" for a thematic summary.</div>
+  <div class="sdsc">Open-text responses from both survey years. Each panel includes a thematic summary and full browsable quotes filtered by year.</div>
   <div id="aipanels"></div>
 </div>
 
@@ -333,7 +333,6 @@ const OT={
 // ── Filter state ──────────────────────────────────────────────────────────
 let F={year:"All",cert:"All",setting:"All",exp:"All",cat:"All"};
 let tInited={};
-const aiCache={};
 let drObj=null,ovCC=null,ovSC=null,ovCaC=null,ovExpC=null,ovExpCC=null;
 let yBaC=null,yRaC=null,opSC=null,ceOk=false,mapOk=false;
 
@@ -663,16 +662,52 @@ const PANELS=[
   {id:"feedback",title:"General Feedback & Suggestions",icon:"💬",desc:'Responses to: "Please provide additional feedback on topics needing more training."'}
 ];
 
+const STATIC_SUMMARIES = {
+  equipment: `Capnography emerged as the single most-cited equipment confidence gap, with multiple providers across all levels noting they understand its existence but lack confidence interpreting waveforms and using readings to guide prehospital treatment decisions. Ventilators — including automated transport ventilators, BiPAP, and CPAP — were a close second, with AEMTs in particular noting that BiPAP skills have historically been a Paramedic-level function and access to training is limited. Infrequent-use equipment drives the majority of responses: IO access, Lucas devices, pelvic binders, i-Gel airways, and Kendrick/Sager splints were each flagged specifically as items providers have been trained on but rarely use, eroding confidence over time. Point-of-care ultrasound was mentioned by several Paramedic-level providers as a capability they want but cannot access — two respondents used notably strong language about Wisconsin's restrictions on POCUS — and newer medications including TXA, ketamine, droperidol, and IV acetaminophen were cited as areas where providers have the credential but limited practical experience.`,
+  training: `The most consistent theme is a strong divide between well-resourced agencies and those without adequate leadership or medical direction infrastructure. Providers from agencies with active medical directors reported frequent, high-quality training; providers from agencies with weak or absent leadership described being largely self-directed, relying on online recertification courses as their only exposure to new content. Capnography and BiPAP/ventilator operation were the most commonly named topics where respondents felt training was inadequate or insufficient, consistent with the equipment confidence responses. Whole blood, IV Tylenol, and pediatric restraint systems were cited as specific examples of new or updated equipment where providers received minimal hands-on preparation. A notable secondary theme is the rural access problem: several providers described wanting to bring trainers to their community but finding it logistically or financially prohibitive, and one respondent noted that online resources were their only option by default.`,
+  wellness: `Mental health is overwhelmingly the dominant theme — it appears in some form in the majority of responses, ranging from general calls for better resources to specific concerns about PTSD, cumulative stress from repeated traumatic calls, and the stigma that prevents providers from seeking help. Burnout from understaffing is a close second, with volunteers in particular describing a compounding cycle where declining numbers mean remaining providers work more, have less recovery time, and are more likely to leave, worsening the shortage. Providers consistently noted that the EMS culture normalizes unhealthy coping — including heavy alcohol use and self-reliance — and that leadership rarely makes wellness a budget or scheduling priority. Debriefing after traumatic calls and peer support programs were the most specific and actionable requests, with multiple respondents noting these resources either don't exist in their region or exist on paper but aren't genuinely accessible. Physical fitness, sleep and fatigue management, and nutrition were raised as secondary topics, with particular concern about the physical demands of EMS work on a workforce that lacks access to the same occupational health infrastructure available to hospital-based healthcare providers.`,
+  feedback: `Pediatrics was the most consistently requested training topic across both years — specifically low-frequency, high-acuity presentations including pediatric cardiac arrest, pediatric transport decisions, and neonatal care, where providers feel the gap between initial training and real-world readiness is the widest. Rural EMS received significant attention, with providers describing a persistent sense that state-level policy and training design is oriented toward urban and suburban services, leaving rural volunteers underserved on both access to in-person training and on topics relevant to their operational context (transport destination decisions, scope utilization with limited backup, and recruitment and retention). Critical thinking skills were raised repeatedly as the underlying gap beneath clinical topic deficiencies — several experienced providers expressed frustration with protocol-driven practice that doesn't prepare providers to manage ambiguous or complex presentations. Leadership and management development was a distinct and emphatic theme, with multiple respondents noting that new service directors receive no formal training and that supervisory skills are widely underdeveloped. Documentation, MCI/triage training, and EKG interpretation rounded out the most common specific requests, with several providers also calling for expanded AEMT scope and reduced barriers to community paramedic and critical care pathways.`
+};
+
 function buildVoices(){
   const con=document.getElementById("aipanels");con.innerHTML="";
   PANELS.forEach(p=>{
     const tot=OT[p.id].all.length;
     const el=document.createElement("div");el.className="aip";
-    el.innerHTML=`<div class="aihd" onclick="toggleAI('${p.id}')"><div class="aihl"><span style="font-size:18px">${p.icon}</span><div><div class="aiht">${p.title}</div><div class="aihc">${tot} substantive responses</div></div></div><button class="aitog" id="abtn-${p.id}" onclick="event.stopPropagation();analyzeText('${p.id}')">Analyze with AI ↗</button></div><div class="aibdy hidden" id="abdy-${p.id}"><div class="aitbs"><div class="aitb active" onclick="swAT('${p.id}','sum',this)">AI Summary</div><div class="aitb" onclick="swAT('${p.id}','quo',this)">Browse Quotes (${tot})</div></div><div class="aipn active" id="apn-sum-${p.id}"><p style="font-size:12px;color:var(--tmu);margin-bottom:10px">${p.desc}</p><div class="aisum" id="asum-${p.id}"><div style="font-size:12px;color:var(--tmu);font-style:italic">Click "Analyze with AI" above to generate a thematic summary.</div></div></div><div class="aipn" id="apn-quo-${p.id}"><div class="aiyr"><button class="aiyc active" onclick="fQ('${p.id}','all',this)">Both years</button><button class="aiyc" onclick="fQ('${p.id}','24',this)">2024 only</button><button class="aiyc" onclick="fQ('${p.id}','25',this)">2025 only</button></div><div class="aiqs" id="aqs-${p.id}"></div></div></div>`;
+    el.innerHTML=`<div class="aihd" onclick="toggleAI('${p.id}')">
+      <div class="aihl">
+        <span style="font-size:18px">${p.icon}</span>
+        <div>
+          <div class="aiht">${p.title}</div>
+          <div class="aihc">${tot} substantive responses · click to expand</div>
+        </div>
+      </div>
+      <span style="font-size:11px;color:rgba(255,255,255,.4);padding-right:4px">▾</span>
+    </div>
+    <div class="aibdy hidden" id="abdy-${p.id}">
+      <div class="aitbs">
+        <div class="aitb active" onclick="swAT('${p.id}','sum',this)">Summary</div>
+        <div class="aitb" onclick="swAT('${p.id}','quo',this)">Browse Quotes (${tot})</div>
+      </div>
+      <div class="aipn active" id="apn-sum-${p.id}">
+        <p style="font-size:11px;color:var(--tmu);margin-bottom:12px;font-style:italic">${p.desc}</p>
+        <div style="font-size:13px;color:var(--tm);line-height:1.8">${STATIC_SUMMARIES[p.id]}</div>
+        <div style="margin-top:12px;font-size:11px;color:var(--tmu);font-weight:600;border-top:1px solid var(--s2);padding-top:10px">Based on ${tot} responses across 2024 and 2025 surveys</div>
+      </div>
+      <div class="aipn" id="apn-quo-${p.id}">
+        <div class="aiyr">
+          <button class="aiyc active" onclick="fQ('${p.id}','all',this)">Both years</button>
+          <button class="aiyc" onclick="fQ('${p.id}','24',this)">2024 only</button>
+          <button class="aiyc" onclick="fQ('${p.id}','25',this)">2025 only</button>
+        </div>
+        <div class="aiqs" id="aqs-${p.id}"></div>
+      </div>
+    </div>`;
     con.appendChild(el);
     renderQ(p.id,"all");
   });
 }
+
 function toggleAI(id){document.getElementById("abdy-"+id).classList.toggle("hidden");}
 function swAT(pid,tab,btn){document.querySelectorAll(`#abdy-${pid} .aitb`).forEach(t=>t.classList.remove("active"));document.querySelectorAll(`#abdy-${pid} .aipn`).forEach(p=>p.classList.remove("active"));btn.classList.add("active");document.getElementById(`apn-${tab}-${pid}`).classList.add("active");}
 function fQ(pid,yr,btn){document.querySelectorAll(`#apn-quo-${pid} .aiyc`).forEach(b=>b.classList.remove("active"));btn.classList.add("active");renderQ(pid,yr);}
@@ -688,26 +723,7 @@ function renderQ(pid,yr){
     con.innerHTML+=`<div class="aiq">${q}${isAll?`<span class="aiqbdg" style="background:${bg}">${yr2}</span>`:""}</div>`;
   });
 }
-async function analyzeText(pid){
-  if(aiCache[pid]){document.getElementById("asum-"+pid).innerHTML=aiCache[pid];return;}
-  const btn=document.getElementById("abtn-"+pid);
-  btn.disabled=true;btn.textContent="Analyzing…";
-  const el=document.getElementById("asum-"+pid);
-  el.innerHTML='<div class="aild"><div class="adt"></div><div class="adt"></div><div class="adt"></div><span style="margin-left:4px">Analyzing '+OT[pid].all.length+' responses…</span></div>';
-  const p=PANELS.find(x=>x.id===pid);
-  try{
-    const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,messages:[{role:"user",content:"You are analyzing open-text survey responses from Wisconsin EMS providers about their educational needs (WEMSA Annual Educational Needs Assessment 2024–2025).\n\nQuestion: "+p.desc+"\n\n"+OT[pid].all.length+" responses:\n\n"+OT[pid].all.join("\n---\n")+"\n\nWrite a concise thematic analysis (4–6 sentences): identify 2–4 most common themes, note striking or actionable responses, highlight training priorities, mention rural vs urban patterns if present. Name actual equipment, topics, or concerns. Plain prose only."}]})});
-    const data=await r.json();
-    const txt=data.content?.[0]?.text||"Analysis unavailable.";
-    const fmt=`<div style="font-size:13px;color:var(--tm);line-height:1.75">${txt.replace(/\n/g,"<br>")}</div><div style="margin-top:10px;font-size:11px;color:var(--tmu);font-weight:600">Generated from ${OT[pid].all.length} responses · Click Browse Quotes to read all</div>`;
-    aiCache[pid]=fmt;el.innerHTML=fmt;btn.textContent="Re-analyze ↗";btn.disabled=false;
-  }catch(e){
-    el.innerHTML='<div style="font-size:12px;color:var(--red)">Analysis failed — please try again.</div>';
-    btn.textContent="Analyze with AI ↗";btn.disabled=false;
-  }
-}
 
-// ── TAB ROUTING ───────────────────────────────────────────────────────────
 function showTab(id,el){
   document.querySelectorAll(".sec").forEach(s=>s.classList.remove("active"));
   document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
